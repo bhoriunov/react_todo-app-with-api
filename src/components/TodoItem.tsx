@@ -56,16 +56,20 @@ export const TodoItem: React.FC<TodoItemProps> = ({
         loading: loadingIds.includes(todo.id) || todo.id === tempTodo?.id,
       })}
     >
-      <label className="todo__status-label">
+      <button
+        type="button"
+        className="todo__status-label"
+        data-cy="TodoStatus"
+        disabled={todo.id === tempTodo?.id || loadingIds.includes(todo.id)}
+        onClick={() => handleToggleStatus(todo.id, !todo.completed)}
+      >
         <input
-          data-cy="TodoStatus"
           type="checkbox"
           className="todo__status"
           checked={todo.completed}
-          disabled={todo.id === tempTodo?.id || loadingIds.includes(todo.id)}
-          onChange={() => handleToggleStatus(todo.id, !todo.completed)}
+          readOnly
         />
-      </label>
+      </button>
 
       {isEditing ? (
         <input

@@ -1,12 +1,20 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
+import classNames from 'classnames';
 import { Header } from '../src/components/Header';
 import { TodoList } from '../src/components/TodoList';
 import { Footer } from '../src/components/Footer';
-import { getTodos, USER_ID } from './api/todos';
 import { Todo } from './types/Todo';
 import { UserWarning } from './UserWarning';
 import { Filter } from './types/Filter';
-import { client } from './utils/fetchClient';
+import {
+  getTodos,
+  deleteTodo,
+  addTodo,
+  toggleTodoStatus,
+  toggleAllTodos,
+  updateTodoTitle,
+  USER_ID,
+} from './api/todos';
 
 export const App: React.FC = () => {
   const [todos, setTodos] = useState<Todo[]>([]);
@@ -17,7 +25,6 @@ export const App: React.FC = () => {
   const [tempTodo, setTempTodo] = useState<Todo | null>(null);
   const [loadingIds, setLoadingIds] = useState<number[]>([]);
   const [editingTodoId, setEditingTodoId] = useState<number | null>(null);
-  const [editedTitle, setEditedTitle] = useState('');
 
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -70,7 +77,6 @@ export const App: React.FC = () => {
 
   const startEditing = (todoId: number) => {
     setEditingTodoId(todoId);
-    setEditedTitle(todos.find(todo => todo.id === todoId)?.title || '');
   };
 
   const handleAddTodo = useCallback(
@@ -84,29 +90,20 @@ export const App: React.FC = () => {
         return;
       }
 
-      const tempId = Date.now();
-      const tempTodoItem: Todo = {
-        id: tempId,
+      setIsLoading(true);
+      setTempTodo({
+        id: Date.now(),
         title: newTodo.trim(),
         completed: false,
         userId: USER_ID,
-      };
-
-      setTempTodo(tempTodoItem);
-      setIsLoading(true);
+      });
 
       try {
-        const newTodoData = await client.post<Todo>('/todos', {
-          title: tempTodoItem.title,
-          userId: tempTodoItem.userId,
-          completed: tempTodoItem.completed,
-        });
+        const addedTodo = await addTodo(newTodo.trim());
 
-        setTodos(prev => [...prev, newTodoData]);
+        setTodos(prev => [...prev, addedTodo]);
         setNewTodo('');
-        if (inputRef.current) {
-          inputRef.current.focus();
-        }
+        inputRef.current?.focus();
       } catch {
         setError('Unable to add a todo');
       } finally {
@@ -121,10 +118,8 @@ export const App: React.FC = () => {
     setLoadingIds(prev => [...prev, todoId]);
 
     try {
-      await client.delete(`/todos/${todoId}`);
+      await deleteTodo(todoId);
       setTodos(prev => prev.filter(todo => todo.id !== todoId));
-
-      inputRef.current?.focus();
     } catch {
       setError('Unable to delete a todo');
     } finally {
@@ -139,7 +134,7 @@ export const App: React.FC = () => {
 
     try {
       const results = await Promise.allSettled(
-        completedTodos.map(todo => client.delete(`/todos/${todo.id}`)),
+        completedTodos.map(todo => deleteTodo(todo.id)),
       );
 
       const successfulIds = completedTodos
@@ -164,34 +159,14 @@ export const App: React.FC = () => {
 
   const handleToggleAll = async () => {
     const shouldCompleteAll = todos.some(todo => !todo.completed);
-    const todosToToggle = todos.filter(
-      todo => todo.completed !== shouldCompleteAll,
-    );
 
-    setLoadingIds(todosToToggle.map(todo => todo.id));
+    setLoadingIds(todos.map(todo => todo.id));
 
     try {
-      const results = await Promise.allSettled(
-        todosToToggle.map(todo =>
-          client.patch(`/todos/${todo.id}`, { completed: shouldCompleteAll }),
-        ),
-      );
-
-      const successfulIds = todosToToggle
-        .filter((_, index) => results[index].status === 'fulfilled')
-        .map(todo => todo.id);
-
+      await toggleAllTodos(shouldCompleteAll, todos);
       setTodos(prev =>
-        prev.map(todo =>
-          successfulIds.includes(todo.id)
-            ? { ...todo, completed: shouldCompleteAll }
-            : todo,
-        ),
+        prev.map(todo => ({ ...todo, completed: shouldCompleteAll })),
       );
-
-      if (results.some(result => result.status === 'rejected')) {
-        setError('Unable to update a todo');
-      }
     } catch {
       setError('Unable to toggle all todos');
     } finally {
@@ -206,18 +181,10 @@ export const App: React.FC = () => {
       return;
     }
 
-    if (newTitle === todos.find(todo => todo.id === todoId)?.title) {
-      setEditingTodoId(null);
-
-      return;
-    }
-
     setLoadingIds(prev => [...prev, todoId]);
 
     try {
-      const updatedTodo = await client.patch<Todo>(`/todos/${todoId}`, {
-        title: newTitle,
-      });
+      const updatedTodo = await updateTodoTitle(todoId, newTitle.trim());
 
       setTodos(prev =>
         prev.map(todo => (todo.id === todoId ? updatedTodo : todo)),
@@ -235,16 +202,18 @@ export const App: React.FC = () => {
   };
 
   const handleToggleStatus = async (todoId: number, completed: boolean) => {
+    const todo = todos.find(t => t.id === todoId);
+
+    if (!todo) {
+      return;
+    }
+
     setLoadingIds(prev => [...prev, todoId]);
 
     try {
-      const updatedTodo = await client.patch<Todo>(`/todos/${todoId}`, {
-        completed,
-      });
+      const updatedTodo = await toggleTodoStatus(todoId, completed);
 
-      setTodos(prev =>
-        prev.map(todo => (todo.id === todoId ? updatedTodo : todo)),
-      );
+      setTodos(prev => prev.map(t => (t.id === todoId ? updatedTodo : t)));
     } catch {
       setError('Unable to update a todo');
     } finally {
@@ -298,9 +267,13 @@ export const App: React.FC = () => {
       </div>
       <div
         data-cy="ErrorNotification"
-        className={`notification is-danger is-light has-text-weight-normal ${
-          error ? '' : 'hidden'
-        }`}
+        className={classNames(
+          'notification',
+          'is-danger',
+          'is-light',
+          'has-text-weight-normal',
+          { hidden: !error },
+        )}
       >
         <button
           type="button"
