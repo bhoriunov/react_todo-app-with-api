@@ -59,11 +59,12 @@ export const TodoItem: React.FC<TodoItemProps> = ({
       <button
         type="button"
         className="todo__status-label"
-        data-cy="TodoStatus"
+        // data-cy="TodoStatus"
         disabled={todo.id === tempTodo?.id || loadingIds.includes(todo.id)}
         onClick={() => handleToggleStatus(todo.id, !todo.completed)}
       >
         <input
+          data-cy="TodoStatus"
           type="checkbox"
           className="todo__status"
           checked={todo.completed}
