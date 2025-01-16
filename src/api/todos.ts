@@ -3,8 +3,6 @@ import { client } from '../utils/fetchClient';
 
 export const USER_ID = 2050;
 
-const BASE_URL = 'https://mate.academy/students-api';
-
 export const getTodos = async (): Promise<Todo[]> => {
   return client.get<Todo[]>(`/todos?userId=${USER_ID}`);
 };
@@ -16,25 +14,25 @@ export const addTodo = async (title: string): Promise<Todo> => {
     userId: USER_ID,
   };
 
-  return client.post<Todo>(`${BASE_URL}/todos`, newTodo);
+  return client.post<Todo>(`/todos`, newTodo);
 };
 
 export const deleteTodo = async (todoId: number): Promise<void> => {
-  return client.delete(`${BASE_URL}/todos/${todoId}`) as Promise<void>;
+  return client.delete(`/todos/${todoId}`) as Promise<void>;
 };
 
 export const updateTodoTitle = async (
   todoId: number,
   newTitle: string,
 ): Promise<Todo> => {
-  return client.patch<Todo>(`${BASE_URL}/todos/${todoId}`, { title: newTitle });
+  return client.patch<Todo>(`/todos/${todoId}`, { title: newTitle });
 };
 
 export const toggleTodoStatus = async (
   todoId: number,
   completed: boolean,
 ): Promise<Todo> => {
-  return client.patch<Todo>(`${BASE_URL}/todos/${todoId}`, { completed });
+  return client.patch<Todo>(`/todos/${todoId}`, { completed });
 };
 
 export const toggleAllTodos = async (
@@ -45,7 +43,7 @@ export const toggleAllTodos = async (
     todos
       .filter(todo => todo.completed !== shouldCompleteAll)
       .map(todo =>
-        client.patch<Todo>(`${BASE_URL}/todos/${todo.id}`, {
+        client.patch<Todo>(`/todos/${todo.id}`, {
           completed: shouldCompleteAll,
         }),
       ),
